@@ -1,5 +1,7 @@
 # uSDT - Universal Software Defined Transmitter
 
+![alt text](https://github.com/UR4URV/uSDT/blob/main/img/uSDT_7.jpg)
+
 This device can be used as a transmitter for an SDR receiver (for example ATS-20, RTL-SDR, etc.)
 
 This device is built on the ESP32C3 microcontroller (Module ESP32C3 SuperMini).
