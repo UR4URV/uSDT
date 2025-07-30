@@ -33,9 +33,12 @@ A library from the https://github.com/kgoba/ft8_lib repository was used to encod
 
 ![alt text](https://github.com/UR4URV/uSDT/blob/main/main_board/uSDT_main_board.jpg)
 
+![alt text](https://github.com/UR4URV/uSDT/blob/main/img/uSDT_1.jpg)
 
 ## Front board
 
 ![alt text](https://github.com/UR4URV/uSDT/blob/main/front_board/uSDT_front_board.jpg)
+
+![alt text](https://github.com/UR4URV/uSDT/blob/main/img/uSDT_4.jpg)
 
 
