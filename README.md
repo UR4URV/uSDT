@@ -2,7 +2,23 @@
 
 This device can be used as a transmitter for an SDR receiver (for example ATS-20, RTL-SDR, etc.)
 
+This device is built on the ESP32C3 microcontroller (Module ESP32C3 SuperMini).
 
+To generate the RF signal, a module based on SI5351 was used.
+
+Time synchronization is implemented on the RTC DS1307 module. Also, a DS18B20 temperature sensor can be installed on this module.
+
+At the moment, the device only works with digital communication modes (FT8, WSPR)
+
+In the code, must enter your WiFi connection details and specify your CALLSIGN and QTH.
+
+```c
+const char *ssid = "<...>";     //WiFi SSID
+const char *password = "<...>"; //WiFi password
+
+char callsign[10] = "<...>";    //Your callsign
+char location[10] = "<...>";    //Your QTH
+```
 
 ## Electrical circuit
 
