@@ -6,7 +6,7 @@ This device can be used as a transmitter for an SDR receiver (for example ATS-20
 
 ## Electrical circuit
 
-![alt text](https://github.com/UR4URV/uSDT/blob/main/uSDT_v1.0_scheme.pdf)
+![alt text](https://github.com/UR4URV/uSDT/blob/main/uSDT_v1.0_scheme.png)
 
 
 ## Main board
