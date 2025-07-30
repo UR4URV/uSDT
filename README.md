@@ -28,6 +28,8 @@ char location[10] = "<...>";    //Your QTH
 
 A library from the https://github.com/kgoba/ft8_lib repository was used to encode FT8.
 
+In the ArduinoIDE environment, the following has been added to the board manager: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+
 ## Electrical scheme
 
 ![alt text](https://github.com/UR4URV/uSDT/blob/main/uSDT_v1.0_scheme.png)
