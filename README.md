@@ -10,7 +10,11 @@ To generate the RF signal, a module based on SI5351 was used.
 
 Time synchronization is implemented on the RTC DS1307 module. Also, a DS18B20 temperature sensor can be installed on this module.
 
-At the moment, the device only works with digital communication modes (FT8, WSPR).
+At the moment, the device only works with digital communication modes (FT8, WSPR). 
+
+Added CAT interface (KENWOOD TS-480) for device management e.g. with WSJT-X.
+
+Added web interface for device management.
 
 Update the file `uSDT_v1.0.ino` your WiFi connection details and specify your CALLSIGN and QTH.
 
@@ -41,4 +45,7 @@ A library from the https://github.com/kgoba/ft8_lib repository was used to encod
 
 ![alt text](https://github.com/UR4URV/uSDT/blob/main/img/uSDT_4.jpg)
 
+## Web interface
+
+![alt text](https://github.com/UR4URV/uSDT/blob/main/img/uSDT_web_interface.png)
 
