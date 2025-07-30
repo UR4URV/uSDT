@@ -28,7 +28,7 @@ char location[10] = "<...>";    //Your QTH
 
 A library from the https://github.com/kgoba/ft8_lib repository was used to encode FT8.
 
-## Electrical circuit
+## Electrical scheme
 
 ![alt text](https://github.com/UR4URV/uSDT/blob/main/uSDT_v1.0_scheme.png)
 
