@@ -23,6 +23,8 @@
 #include <TimeLib.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <OneWire.h>
+#include <Encoder.h>
 
 //---------------------------------
 
@@ -35,6 +37,7 @@ char location[10] = "<...>";    //Your QTH
 //---------------------------------
 
 #define FIRMWARE_VERSION 1.0
+#define MCU_MODEL "ESP32C3"
 
 #define I2C_SDA 8
 #define I2C_SCL 9
@@ -50,6 +53,8 @@ char location[10] = "<...>";    //Your QTH
 #define AUDIO_OUTPUT_PIN 4
 #define AUDIO_INPUT_PIN A3
 //
+#define ONEWIRE_PIN 10
+//
 #define UART_RX 20
 #define UART_TX 21
 
@@ -62,12 +67,21 @@ char location[10] = "<...>";    //Your QTH
 
 //---------------------------------
 
+Encoder encoder_button(ENCODER_PIN_A, ENCODER_PIN_B);
+
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 RTC_DS1307 rtc;
 DateTime date_time;
 
 Si5351 si5351;
+
+OneWire ds(ONEWIRE_PIN);
+//
+byte onewire_addr[8];
+byte onewire_data[9];
+float onewire_temp = 0;
+bool status_onewire = false;
 
 WebServer web_server(80);
 
@@ -348,6 +362,15 @@ void web_main_html() {
   } else {
     message += "<b style=\"color:red;\">ERROR</b>";
   };
+  message += "<br>\n";
+  //
+  message += "Temperature: ";
+  if (status_onewire) {
+    message += onewire_temp;
+    message += " C";
+  } else {
+    message += "onewire device not found!";
+  };
   message += "<br><br>\n";
   //
   message += "<input class=\"button\" type=\"submit\" value=\"Save\">\n";
@@ -414,7 +437,7 @@ void web_main_html() {
   message += ft8_message;
   message += "\"><br>\n";
   message += "<i><small>(Max 13 characters for message)</small></i>\n";
-  message += "<br><br><br><br>\n";
+  message += "<br><br><br><br><br>\n";
   //
   message += "<input class=\"button\" type=\"submit\" value=\"Save\">\n";
   message += "<input class=\"button\" type=\"reset\" value=\"Reset\">\n";
@@ -658,6 +681,9 @@ void get_serial() {
   if (serial_end) {
     //Serial.println(serial_data);
 
+    String freq_string = String(freq_main);
+    int freq_len = freq_string.length();
+
     //Get ID
     if((serial_data[0] == 'I') && (serial_data[1] == 'D') && (serial_data[2] == ';')) {
       Serial.print("ID020;");
@@ -666,7 +692,10 @@ void get_serial() {
     //Get freq
     if((serial_data[0] == 'F') && (serial_data[1] == 'A') && (serial_data[2] == ';')) {
       //Specify the frequency in Hz (11-digit).
-      Serial.print("FA000");
+      Serial.print("FA");
+      for (int i = 0; i < (8 - freq_len); i++) {
+        Serial.print("0");
+      }
       Serial.print(freq_main);
       Serial.print("000;");
     }
@@ -684,31 +713,32 @@ void get_serial() {
 
     //Set mode RX
     if((serial_data[0] == 'R') && (serial_data[1] == 'X') && (serial_data[2] == ';')) {
+      Serial.print("RX0;");
+      //
       count_tx = 0;
       status_tx = false;
+    }
+
+    //Set mode TX;
+    if((serial_data[0] == 'T') && (serial_data[1] == 'X') && (serial_data[2] == ';')) {
+      Serial.print("TX0;");
       //
-      Serial.print("RX0;");
+      count_tx = 1;
+      status_tx = true;
     }
 
     //Set mode TX0 or TX1 or TX2 (default mode TX0)
-    if((serial_data[0] == 'T') && (serial_data[1] == 'X') && (serial_data[2] == ';')) {
-      //count_tx = 1;
-      status_tx = true;
-      //
-      ft8_encode_message();
-      ft8_tx(ft8_tones); 
-      //
-      Serial.print("TX0;");
-    }
-    //
     if((serial_data[0] == 'T') && (serial_data[1] == 'X') && (serial_data[3] == ';')) {
+      Serial.print("TX0;");
+      //
       //count_tx = 1;
       status_tx = true;
       //
       ft8_encode_message();
-      ft8_tx(ft8_tones); 
+      ft8_tx(ft8_tones);
       //
-      Serial.print("TX0;");
+      count_tx = 0;
+      status_tx = false;
     }
 
     //Power status
@@ -719,7 +749,10 @@ void get_serial() {
     //Retrieves the transceiver status.
     if((serial_data[0] == 'I') && (serial_data[1] == 'F') && (serial_data[2] == ';')) {
       //Specify the frequency in Hz (11-digit).
-      Serial.print("IF000");
+      Serial.print("IF");
+      for (int i = 0; i < (8 - freq_len); i++) {
+        Serial.print("0");
+      }
       Serial.print(freq_main);
       Serial.print("000");
       //
@@ -727,43 +760,152 @@ void get_serial() {
       Serial.print("00000");    //RIT/ XIT frequency ±9990 in Hz
       Serial.print("000");      //0: RIT OFF, 1: RIT ON //0: XIT OFF, 1: XIT ON //Always 0 for the TS-480 (Memory channel bank number).
       Serial.print("00");       //Memory channel number (00 ~ 99).
-      if (status_tx) Serial.print("1"); else Serial.print("0");  //0: RX, 1: TX
+      if (status_tx) { Serial.print("1"); } else { Serial.print("0"); }  //0: RX, 1: TX
       Serial.print("00000000;");
     }
 
     //Sets or reads the Auto Information (AI) function ON/ OFF.
     if((serial_data[0] == 'A') && (serial_data[1] == 'I') && (serial_data[2] == ';')) Serial.print("AI0;");
-    if((serial_data[0] == 'A') && (serial_data[1] == 'I') && (serial_data[2] == '0')) Serial.print("AI0;");
+    if((serial_data[0] == 'A') && (serial_data[1] == 'I') && (serial_data[3] == ';')) Serial.print("AI0;");
 
     //Recalls or reads the operating mode status.
     if((serial_data[0] == 'M') && (serial_data[1] == 'D') && (serial_data[2] == ';')) Serial.print("MD0;");
     if((serial_data[0] == 'M') && (serial_data[1] == 'D') && (serial_data[3] == ';')) Serial.print("MD0;");
 
-    //Sets or reads the Auto Information (AI) function ON/ OFF.
+    //Sets or reads the AF gain.
     if((serial_data[0] == 'A') && (serial_data[1] == 'G') && (serial_data[2] == '0')) Serial.print("AG0;");
 
     //Sets or reads the XIT function status.
-    if((serial_data[0] == 'X') && (serial_data[1] == 'T') && (serial_data[2] == '1')) Serial.print("XT1;");
+    if((serial_data[0] == 'X') && (serial_data[1] == 'T') && (serial_data[2] == ';')) Serial.print("XT0;");
+    if((serial_data[0] == 'X') && (serial_data[1] == 'T') && (serial_data[3] == ';')) Serial.print("XT0;");
 
     //Sets or reads the RIT function status.
-    if((serial_data[0] == 'R') && (serial_data[1] == 'T') && (serial_data[2] == '1')) Serial.print("RT1;");
+    if((serial_data[0] == 'R') && (serial_data[1] == 'T') && (serial_data[2] == ';')) Serial.print("RT0;");
+    if((serial_data[0] == 'R') && (serial_data[1] == 'T') && (serial_data[3] == ';')) Serial.print("RT0;");
 
     //Clears the RIT offset frequency.
-    if((serial_data[0] == 'R') && (serial_data[1] == 'C') && (serial_data[2] == ';')) Serial.print("RC;");
+    //if((serial_data[0] == 'R') && (serial_data[1] == 'C') && (serial_data[2] == ';')) Serial.print("RC;");
 
     //
-    if((serial_data[0] == 'F') && (serial_data[1] == 'L') && (serial_data[2] == '0')) Serial.print("FL0;");
+    //if((serial_data[0] == 'F') && (serial_data[1] == 'L') && (serial_data[2] == '0')) Serial.print("FL0;");
 
     //Reads the transceiver status.
     if((serial_data[0] == 'R') && (serial_data[1] == 'S') && (serial_data[2] == ';')) Serial.print("RS0;");
 
     //Sets or reads the VOX function status.
     if((serial_data[0] == 'V') && (serial_data[1] == 'X') && (serial_data[2] == ';')) Serial.print("VX0;");
-    if((serial_data[0] == 'V') && (serial_data[1] == 'X') && (serial_data[2] == '1')) Serial.print("VX1;");
+    if((serial_data[0] == 'V') && (serial_data[1] == 'X') && (serial_data[3] == ';')) Serial.print("VX0;");
 
     // clear the string:
     serial_data = "";
     serial_end = false;
+  }
+}
+
+//---------------------------------------
+void onewire_scan() {
+  Serial.print("Scan onewire devices... ");
+  if (ds.search(onewire_addr)) {
+    Serial.println("done");
+    //
+    Serial.print("Found device ROM: ");
+    for(byte b = 0; b < 8; b++) {
+      Serial.write(' ');
+      Serial.print(onewire_addr[b], HEX);
+    }
+    Serial.println();
+    //
+    Serial.print("Check CRC device: ");
+    if (OneWire::crc8(onewire_addr, 7) == onewire_addr[7]) {
+      Serial.println("valid");
+      //
+      Serial.print("Chip type: ");
+      switch (onewire_addr[0]) {
+        case 0x10:
+          Serial.println("DS18S20");  // or old DS1820
+          break;
+        case 0x28:
+          Serial.println("DS18B20");
+          break;
+        case 0x22:
+          Serial.println("DS1822");
+          break;
+        default:
+          Serial.println("is not a DS18x20 family device.");
+          //
+          status_onewire = false;
+      } 
+      //
+      status_onewire = true;
+    } else {
+      Serial.println("not valid!");
+      //
+      status_onewire = false;
+    }
+  } else {
+    Serial.println("not found!");
+    //
+    status_onewire = false;
+  }
+}
+
+//---------------------------------------
+void onewire_init_temp() {
+  ds.reset();
+  ds.select(onewire_addr);
+  ds.write(0x44, 1);  // start conversion, with parasite power on at the end
+}
+
+//---------------------------------------
+void onewire_get_temp() {
+  ds.reset();
+  ds.select(onewire_addr);    
+  ds.write(0xBE);  // Read Scratchpad
+  //
+  //Serial.print("Onewire data: ");
+  for (byte b = 0; b < 9; b++) {  // we need 9 bytes
+    onewire_data[b] = ds.read();
+    //Serial.print(onewire_data[b], HEX);
+    //Serial.print(" ");
+  }
+  Serial.println();
+  //
+  // Serial.print("Onewire CRC data: ");
+  // Serial.print(OneWire::crc8(onewire_data, 8), HEX);
+  // Serial.println();
+
+  int16_t onewire_raw = (onewire_data[1] << 8) | onewire_data[0];
+
+  if (onewire_addr[0] == 0x10) {
+    onewire_raw = onewire_raw << 3; // 9 bit resolution default
+    if (onewire_data[7] == 0x10) {
+      // "count remain" gives full 12 bit resolution
+      onewire_raw = (onewire_raw & 0xFFF0) + 12 - onewire_data[6];
+    }
+  } else {
+    byte onewire_cfg = (onewire_data[4] & 0x60);
+    // at lower res, the low bits are undefined, so let's zero them
+    if (onewire_cfg == 0x00) onewire_raw = onewire_raw & ~7;  // 9 bit resolution, 93.75 ms
+    else if (onewire_cfg == 0x20) onewire_raw = onewire_raw & ~3; // 10 bit res, 187.5 ms
+    else if (onewire_cfg == 0x40) onewire_raw = onewire_raw & ~1; // 11 bit res, 375 ms
+    //// default is 12 bit resolution, 750 ms conversion time
+  }
+  onewire_temp = (float)onewire_raw / 16.0;
+}
+
+//---------------------------------------
+void get_encoder_button() {
+  long encoder_pos = encoder_button.readAndReset();
+  //
+  switch (encoder_pos) {
+    case 1:
+      //Serial.println(encoder_pos);
+      freq_main++;
+      break;
+    case -1:
+      //Serial.println(encoder_pos);
+      freq_main--;
+      break;
   }
 }
 
@@ -820,8 +962,9 @@ void setup() {
     display_print(0, 0, NULL, 2, "uSDT");
     display_print(80, 8, NULL, 1, "v");
     display.print(FIRMWARE_VERSION);
-    display_print(0, 16, NULL, 2, "UR4URV");    
-    display_print(0, 35, NULL, 1, "MCU: ESP32C3");
+    display_print(0, 16, NULL, 2, "UR4URV");
+    display_print(0, 35, NULL, 1, "MCU: ");
+    display.print(MCU_MODEL);
     display_print(0, 45, NULL, 1, "Clock RTC: DS1307");    
     display_print(0, 55, NULL, 1, "Generator: SI5351");
     //
@@ -937,6 +1080,8 @@ void setup() {
     display.display();
   }
 
+  onewire_scan();
+
   //Create default FT8 message
   strcpy(ft8_message, "CQ ");
   strcat(ft8_message, callsign);
@@ -956,11 +1101,14 @@ void setup() {
 //---------------------------------------
 //---------------------------------------
 uint32_t tmr;
+bool onewire_init = true;
 //
 void loop() {
   web_server.handleClient();
   //
   get_serial();
+  //
+  get_encoder_button();
   //
   int buttonState = digitalRead(BUTTON_PIN);
   if (buttonState == LOW) {
@@ -972,6 +1120,16 @@ void loop() {
     tmr = millis();
     //
     date_time = rtc.now();
+    //
+    if (status_onewire) {
+      if (onewire_init) {
+        onewire_init = false;
+        onewire_init_temp();
+      } else {
+        onewire_init = true;
+        onewire_get_temp();
+      }
+    }
     //
     if (status_oled) show_main();
   }
